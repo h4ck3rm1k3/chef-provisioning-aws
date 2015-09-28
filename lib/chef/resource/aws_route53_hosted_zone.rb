@@ -75,9 +75,9 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
     config
   end
 
-  def populate_zone_ids(record_set_resources, hosted_zone_id)
+  def populate_zone_info(record_set_resources, hosted_zone)
     record_set_resources.each do |rs|
-      rs.aws_route53_zone_id(hosted_zone_id)
+      rs.aws_route53_zone_id(hosted_zone.id)
     end
   end
 
@@ -100,7 +100,7 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
       new_resource.aws_route53_zone_id(zone.id)
 
       if record_set_resources
-        populate_zone_ids(record_set_resources, zone.id)
+        populate_zone_info(record_set_resources, zone)
 
         change_list = record_set_resources.map { |rs| rs.to_aws_change_struct(CREATE) }
 
@@ -125,7 +125,7 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
     end
 
     if record_set_resources
-      populate_zone_ids(record_set_resources, hosted_zone.id)
+      populate_zone_info(record_set_resources, hosted_zone)
 
       aws_record_sets = hosted_zone.resource_record_sets
 
@@ -215,6 +215,7 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
     return nil unless record_set_resources
 
     record_set_resources.each do |rs|
+      rs.aws_route53_zone_name(new_resource.name)
       rs.validate!
     end
 

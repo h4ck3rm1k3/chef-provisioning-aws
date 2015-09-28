@@ -65,6 +65,24 @@ describe Chef::Resource::AwsRoute53RecordSet do
       expect { resource.validate_rr_type("not a valid RR type", nil) }.to raise_error(ArgumentError)
     end
   end
+
+  context "#fqdn" do
+    fit "generates correct FQDNs" do
+      zone_name = "23skidoo.com"
+      hostname = "fnord"
+
+      resource.aws_route53_zone_name(zone_name)
+      expect(resource.fqdn).to eq("#{resource_name}.#{zone_name}")
+
+      fq_resource = Chef::Resource::AwsRoute53RecordSet.new("#{hostname}.#{zone_name}")
+      fq_resource.aws_route53_zone_name(zone_name)
+      expect(fq_resource.fqdn).to eq("#{hostname}.#{zone_name}")
+
+      fq_resource = Chef::Resource::AwsRoute53RecordSet.new("#{hostname}.#{zone_name}.")
+      fq_resource.aws_route53_zone_name(zone_name)
+      expect(fq_resource.fqdn).to eq("#{hostname}.#{zone_name}.")
+    end
+  end
 end
 
 describe Chef::Provider::AwsRoute53HostedZone do
