@@ -24,8 +24,6 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
   resource_name :aws_route53_record_set
   attribute :aws_route53_zone_id, kind_of: String, required: true
 
-  # if you add the trailing dot, AWS returns "FATAL problem: DomainLabelEmpty encountered," so we'll stop that
-  # ourselves.
   attribute :rr_name, required: true
   attribute :type, equal_to: %w(SOA A TXT NS CNAME MX PTR SRV SPF AAAA), required: true
   attribute :ttl, kind_of: Fixnum, required: true
@@ -44,6 +42,10 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
   def validate_rr_type!(type, rr_list)
     case type
     # we'll check for integers, but leave the user responsible for valid DNS names.
+    when "A"
+      rr_list.all? { |v| v =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/ } ||
+          raise(::Chef::Exceptions::ValidationFailed,
+                "A records are of the form '141.2.25.3'")
     when "MX"
       rr_list.all? { |v| v =~ /^\d+\s+[^ ]+/} ||
           raise(::Chef::Exceptions::ValidationFailed,
@@ -60,7 +62,7 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
     when "A", "TXT", "PTR", "AAAA"
       true
     else
-      raise ArgumentError, "Argument '#{type}' must be one of #{%w(MX SRV CNAME A TXT PTR AAAA)}"
+      raise ArgumentError, "Argument '#{type}' must be one of #{%w(A MX SRV CNAME TXT PTR AAAA)}"
     end
   end
 

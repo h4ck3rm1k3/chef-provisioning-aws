@@ -145,21 +145,6 @@ describe Chef::Resource::AwsRoute53HostedZone do
                                                    resource_record_sets: [{}, {}, sdk_cname_rr]).and be_idempotent
           end
 
-          it "creates a hosted zone with a RecordSet with an RR name with a trailing dot" do
-            expect_recipe {
-              aws_route53_hosted_zone "feegle.com" do
-                record_sets {
-                  aws_route53_record_set "some-host.feegle.com." do
-                    type "CNAME"
-                    ttl 3600
-                    resource_records ["some-other-host"]
-                  end
-                }
-              end
-            }.to create_an_aws_route53_hosted_zone("feegle.com",
-                                                   resource_record_sets: [{}, {}, sdk_cname_rr]).and be_idempotent
-          end
-
           # AWS's error for this is "FATAL problem: DomainLabelEmpty encountered", so we help the user out.
           it "crashes with a RecordSet with a mismatched zone name with a trailing dot" do
             expect_converge {
@@ -182,7 +167,7 @@ describe Chef::Resource::AwsRoute53HostedZone do
               aws_route53_hosted_zone "feegle.com" do
                 record_sets {
                   aws_route53_record_set "some-hostname CNAME" do
-                    rr_name "some-host.feegle.com"
+                    rr_name "some-host"
                     type "CNAME"
                     ttl 3600
                     resource_records ["some-other-host"]
@@ -193,7 +178,7 @@ describe Chef::Resource::AwsRoute53HostedZone do
               aws_route53_hosted_zone "feegle.com" do
                 record_sets {
                   aws_route53_record_set "some-hostname CNAME" do
-                    rr_name "some-host.feegle.com"
+                    rr_name "some-host"
                     type "CNAME"
                     ttl 1800
                     resource_records ["some-other-host"]
@@ -280,7 +265,7 @@ describe Chef::Resource::AwsRoute53HostedZone do
             expect_recipe {
               aws_route53_hosted_zone "feegle.com" do
                 record_sets {
-                  aws_route53_record_set "some-host.feegle.com" do
+                  aws_route53_record_set "some-host" do
                     type "CNAME"
                     ttl 3600
                     resource_records ["some-other-host"]
@@ -291,30 +276,13 @@ describe Chef::Resource::AwsRoute53HostedZone do
                                                    resource_record_sets: [{}, {}, sdk_cname_rr]).and be_idempotent
           end
 
-          it "applies the :rr_name validations to :name" do
-            skip "Appears to be invalid"
-            @zone_to_delete = "feegle.com"
-
-            expect_converge {
-              aws_route53_hosted_zone "feegle.com" do
-                record_sets {
-                  aws_route53_record_set "some-host.feegle.com." do
-                    type "CNAME"
-                    ttl 3600
-                    resource_records ["some-other-host"]
-                  end
-                }
-              end
-            }.to raise_error(Chef::Exceptions::ValidationFailed, /Option rr_name.*cannot end with a dot/)
-          end
-
           context "individual RR types" do
             let(:expected) {{
               cname: {
                 name: "cname-host.feegle.com.",
                 type: "CNAME",
                 ttl: 1800,
-                resource_records: [{ value: "141.222.1.1"}, { value: "8.8.8.8" }],
+                resource_records: [{ value: "8.8.8.8" }],
               },
               a: {
                 name: "a-host.feegle.com.",
@@ -350,11 +318,38 @@ describe Chef::Resource::AwsRoute53HostedZone do
               },
             }}
 
-            it "handles an A record" do
+            it "handles CNAME records" do
               expect_recipe {
                 aws_route53_hosted_zone "feegle.com" do
                   record_sets {
-                    aws_route53_record_set "A-host.feegle.com" do
+                    aws_route53_record_set "CNAME-host" do
+                      type "CNAME"
+                      ttl 1800
+                      resource_records ["8.8.8.8"]
+                    end
+                  }
+                end
+              }.to create_an_aws_route53_hosted_zone("feegle.com",
+                                                     resource_record_sets: [ {}, {}, expected[:cname] ]).and be_idempotent
+
+              expect_converge {
+                aws_route53_hosted_zone "feegle.com" do
+                  record_sets {
+                    aws_route53_record_set "CNAME-host" do
+                      type "CNAME"
+                      ttl 1800
+                      resource_records ["141.222.1.1", "8.8.8.8"]
+                    end
+                  }
+                end
+              }.to raise_error(Chef::Exceptions::ValidationFailed, /CNAME records.*have a single value/)
+            end
+
+            it "handles A records" do
+              expect_recipe {
+                aws_route53_hosted_zone "feegle.com" do
+                  record_sets {
+                    aws_route53_record_set "A-host" do
                       type "A"
                       ttl 1800
                       resource_records ["141.222.1.1", "8.8.8.8"]
@@ -363,12 +358,26 @@ describe Chef::Resource::AwsRoute53HostedZone do
                 end
               }.to create_an_aws_route53_hosted_zone("feegle.com",
                                                      resource_record_sets: [ {}, {}, expected[:a] ]).and be_idempotent
+
+              expect_converge {
+                aws_route53_hosted_zone "feegle.com" do
+                  record_sets {
+                    aws_route53_record_set "A-host" do
+                      type "A"
+                      ttl 1800
+                      resource_records ["hostnames-dont-go-here.com", "8.8.8.8"]
+                    end
+                  }
+                end
+              }.to raise_error(Chef::Exceptions::ValidationFailed, /A records are of the form/)
             end
-            it "handles an AAAA record" do
+
+            # we don't validate IPv6 addresses, because they are complex.
+            it "handles AAAA records" do
               expect_recipe {
                 aws_route53_hosted_zone "feegle.com" do
                   record_sets {
-                    aws_route53_record_set "AAAA-host.feegle.com" do
+                    aws_route53_record_set "AAAA-host" do
                       type "AAAA"
                       ttl 1800
                       resource_records ["2607:f8b0:4010:801::1001", "2607:f8b9:4010:801::1001"]
@@ -378,11 +387,12 @@ describe Chef::Resource::AwsRoute53HostedZone do
               }.to create_an_aws_route53_hosted_zone("feegle.com",
                                                      resource_record_sets: [ {}, {}, expected[:aaaa] ]).and be_idempotent
             end
-            it "handles an MX record" do
+
+            it "handles MX records" do
               expect_recipe {
                 aws_route53_hosted_zone "feegle.com" do
                   record_sets {
-                    aws_route53_record_set "MX-host.feegle.com" do
+                    aws_route53_record_set "MX-host" do
                       type "MX"
                       ttl 1800
                       resource_records ["10 mail1.example.com", "15 mail2.example.com."]
@@ -391,12 +401,26 @@ describe Chef::Resource::AwsRoute53HostedZone do
                 end
               }.to create_an_aws_route53_hosted_zone("feegle.com",
                                                      resource_record_sets: [ {}, {}, expected[:mx] ]).and be_idempotent
+              expect_converge {
+                aws_route53_hosted_zone "feegle.com" do
+                  record_sets {
+                    aws_route53_record_set "MX-host" do
+                      type "MX"
+                      ttl 1800
+                      resource_records ["10mail1.example.com", "mail2.example.com."]
+                    end
+                  }
+                end
+              }.to raise_error(Chef::Exceptions::ValidationFailed, /MX records must have a priority and mail server/)
             end
-            it "handles an TXT record" do
+
+            # we don't validate TXT values:
+            # http://docs.aws.amazon.com/Route53/latest/DeveloperGuide/ResourceRecordTypes.html#TXTFormat
+            it "handles TXT records" do
               expect_recipe {
                 aws_route53_hosted_zone "feegle.com" do
                   record_sets {
-                    aws_route53_record_set "TXT-host.feegle.com" do
+                    aws_route53_record_set "TXT-host" do
                       type "TXT"
                       ttl 300
                       resource_records %w["Very\ Important\ Data" "Even\ More\ Important\ Data"]
@@ -406,11 +430,12 @@ describe Chef::Resource::AwsRoute53HostedZone do
               }.to create_an_aws_route53_hosted_zone("feegle.com",
                                                      resource_record_sets: [ {}, {}, expected[:txt] ]).and be_idempotent
             end
-            it "handles an SRV record" do
+
+            it "handles SRV records" do
               expect_recipe {
                 aws_route53_hosted_zone "feegle.com" do
                   record_sets {
-                    aws_route53_record_set "SRV-host.feegle.com" do
+                    aws_route53_record_set "SRV-host" do
                       type "SRV"
                       ttl 300
                       resource_records ["10 50 8889 chef-server.example.com", "20 70 80 narf.net"]
@@ -419,11 +444,21 @@ describe Chef::Resource::AwsRoute53HostedZone do
                 end
               }.to create_an_aws_route53_hosted_zone("feegle.com",
                                                      resource_record_sets: [ {}, {}, expected[:srv] ]).and be_idempotent
+
+              expect_converge {
+                aws_route53_hosted_zone "feegle.com" do
+                  record_sets {
+                    aws_route53_record_set "SRV-host" do
+                      type "SRV"
+                      ttl 300
+                      resource_records ["1050 8889 chef-server.example.com", "narf.net"]
+                    end
+                  }
+                end
+              }.to raise_error(Chef::Exceptions::ValidationFailed, /SRV.*priority, weight, port, and hostname/)
             end
           end  # end RR types
         end
-
-        it "handles multiple actions gracefully"
       end
     end
   end
