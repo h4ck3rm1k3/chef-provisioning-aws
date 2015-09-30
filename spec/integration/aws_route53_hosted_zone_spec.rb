@@ -276,6 +276,46 @@ describe Chef::Resource::AwsRoute53HostedZone do
                                                    resource_record_sets: [{}, {}, sdk_cname_rr]).and be_idempotent
           end
 
+          context "#inherit_default" do
+            it "provides zone defaults for RecordSet values" do
+              expected_a = {
+                name: "another-host.feegle.com.",
+                type: "A",
+                ttl: 3600,
+                resource_records: [{value: "8.8.8.8"}]
+              }
+              expect_recipe {
+                aws_route53_hosted_zone "feegle.com" do
+                  defaults ttl: 3600, type: "CNAME"
+                  record_sets {
+                    aws_route53_record_set "some-host" do
+                      resource_records ["some-other-host"]
+                    end
+                    aws_route53_record_set "another-host" do
+                      type "A"
+                      resource_records ["8.8.8.8"]
+                    end
+                  }
+                end
+              }.to create_an_aws_route53_hosted_zone("feegle.com",
+                                                     resource_record_sets: [{}, {},
+                                                      expected_a, sdk_cname_rr]).and be_idempotent
+            end
+
+            it "checks for requiredness" do
+              expect_converge {
+                aws_route53_hosted_zone "feegle.com" do
+                  defaults ttl: 3600
+                  record_sets {
+                    aws_route53_record_set "some-host" do
+                      resource_records ["some-other-host"]
+                    end
+                  }
+                end
+              }.to raise_error(Chef::Exceptions::ValidationFailed, /Required argument type/)
+            end
+          end
+
           context "individual RR types" do
             let(:expected) {{
               cname: {

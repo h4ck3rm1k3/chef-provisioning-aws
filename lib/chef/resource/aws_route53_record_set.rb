@@ -1,3 +1,6 @@
+module DefaultInheritor
+end
+
 class Aws::Route53::Types::ResourceRecordSet
   # removing AWS's trailing dots may not be the best thing, but otherwise our job gets much harder.
   def aws_key
@@ -25,18 +28,31 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
   attribute :aws_route53_zone_id, kind_of: String, required: true
 
   attribute :rr_name, required: true
-  attribute :type, equal_to: %w(SOA A TXT NS CNAME MX PTR SRV SPF AAAA), required: true
-  attribute :ttl, kind_of: Fixnum, required: true
+  attribute :type, equal_to: %w(SOA A TXT NS CNAME MX PTR SRV SPF AAAA),
+                   default: lazy { inherit_default(:type, required: true) }
 
-  attribute :resource_records, kind_of: Array, required: true, is: lambda { |rr_list| validate_rr_type!(type, rr_list) }
+  attribute :ttl, kind_of: Fixnum, default: lazy { inherit_default(:ttl, required: true) }
+
+  attribute :resource_records, kind_of: Array, required: true
 
   # this gets set internally and is not intended for DSL use in recipes.
   attribute :aws_route53_zone_name, kind_of: String, required: true,
                                     is: lambda { |zone_name| validate_zone_name!(rr_name, zone_name) }
 
+  attribute :aws_route53_hosted_zone, required: true
+
   def initialize(name, *args)
     self.rr_name(name) unless @rr_name
     super(name, *args)
+  end
+
+  # this lets us delay enforcing requiredness until we've had a chance to absorb defaults.
+  def inherit_default(attrib, opts)
+    default_value = aws_route53_hosted_zone.defaults[attrib]
+    if default_value.nil? && opts[:required]
+      raise Chef::Exceptions::ValidationFailed, "Required argument #{attrib} is missing!"
+    end
+    default_value
   end
 
   def validate_rr_type!(type, rr_list)
@@ -76,6 +92,9 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
   # because these resources can't actually converge themselves, we have to trigger the validations.
   def validate!
     [:rr_name, :type, :ttl, :resource_records, :aws_route53_zone_name].each { |f| self.send(f) }
+
+    # this was in an :is validator, but didn't play well with inheriting default values.
+    validate_rr_type!(type, resource_records)
   end
 
   def aws_key

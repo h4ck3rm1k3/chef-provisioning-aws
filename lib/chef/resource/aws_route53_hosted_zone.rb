@@ -25,6 +25,12 @@ class Chef::Resource::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSR
   attribute :aws_route53_zone_id, kind_of: String, aws_id_attribute: true,
                                   default: lazy { name =~ /^\/hostedzone\// ? name : nil }
 
+  DEFAULTABLE_ATTRS = [:ttl, :type]
+
+  attribute :defaults, kind_of: Hash,
+            callbacks: { "'defaults' keys may be any of #{DEFAULTABLE_ATTRS}" => lambda { |dh|
+                                             (dh.keys - DEFAULTABLE_ATTRS).size == 0 } }
+
   def record_sets(&block)
     if block_given?
       @record_sets_block = block
@@ -215,7 +221,25 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
     return nil unless record_set_resources
 
     record_set_resources.each do |rs|
+      rs.aws_route53_hosted_zone(new_resource)
       rs.aws_route53_zone_name(new_resource.name)
+
+      # if new_resource.defaults
+      #   new_resource.class::DEFAULTABLE_ATTRS.each do |att|
+      #     begin
+      #       # we can't simply check if it's been set, because if it hasn't, the validation explodes.
+      #       rs.send(att)
+      #     rescue Chef::Exceptions::ValidationFailed => ex
+      #       require 'pry'; binding.pry
+      #       if ex.message =~ /Required argument #{att} is missing/
+      #         rs.send(att, new_resource.defaults[att])
+      #       else
+      #         raise
+      #       end
+      #     end
+      #   end
+      # end
+
       rs.validate!
     end
 
