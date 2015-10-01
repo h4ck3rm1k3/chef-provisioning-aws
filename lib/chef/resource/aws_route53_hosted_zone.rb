@@ -224,21 +224,15 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
       rs.aws_route53_hosted_zone(new_resource)
       rs.aws_route53_zone_name(new_resource.name)
 
-      # if new_resource.defaults
-      #   new_resource.class::DEFAULTABLE_ATTRS.each do |att|
-      #     begin
-      #       # we can't simply check if it's been set, because if it hasn't, the validation explodes.
-      #       rs.send(att)
-      #     rescue Chef::Exceptions::ValidationFailed => ex
-      #       require 'pry'; binding.pry
-      #       if ex.message =~ /Required argument #{att} is missing/
-      #         rs.send(att, new_resource.defaults[att])
-      #       else
-      #         raise
-      #       end
-      #     end
-      #   end
-      # end
+      if new_resource.defaults
+        new_resource.class::DEFAULTABLE_ATTRS.each do |att|
+          # check if the RecordSet has its own value, without triggering validation. in Chef >= 12.5, there is
+          # #property_is_set?.
+          if rs.instance_variable_get("@#{att}").nil? && !new_resource.defaults[att].nil?
+            rs.send(att, new_resource.defaults[att])
+          end
+        end
+      end
 
       rs.validate!
     end

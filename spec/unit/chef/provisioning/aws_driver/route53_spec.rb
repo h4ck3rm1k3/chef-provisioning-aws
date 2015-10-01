@@ -72,7 +72,7 @@ describe Chef::Resource::AwsRoute53RecordSet do
     end
 
     it "quietly accepts the remaining RR types" do
-      %w(TXT PTR AAAA).each do |type|
+      %w(TXT PTR AAAA SPF).each do |type|
         expect(resource.validate_rr_type!(type, "We're not validating anything on type '#{type}'.")).to be_truthy
       end
 

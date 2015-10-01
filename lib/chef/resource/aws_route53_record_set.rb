@@ -1,6 +1,3 @@
-module DefaultInheritor
-end
-
 class Aws::Route53::Types::ResourceRecordSet
   # removing AWS's trailing dots may not be the best thing, but otherwise our job gets much harder.
   def aws_key
@@ -28,10 +25,10 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
   attribute :aws_route53_zone_id, kind_of: String, required: true
 
   attribute :rr_name, required: true
-  attribute :type, equal_to: %w(SOA A TXT NS CNAME MX PTR SRV SPF AAAA),
-                   default: lazy { inherit_default(:type, required: true) }
 
-  attribute :ttl, kind_of: Fixnum, default: lazy { inherit_default(:ttl, required: true) }
+  attribute :type, equal_to: %w(SOA A TXT NS CNAME MX PTR SRV SPF AAAA), required: true
+
+  attribute :ttl, kind_of: Fixnum, required: true
 
   attribute :resource_records, kind_of: Array, required: true
 
@@ -44,15 +41,6 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
   def initialize(name, *args)
     self.rr_name(name) unless @rr_name
     super(name, *args)
-  end
-
-  # this lets us delay enforcing requiredness until we've had a chance to absorb defaults.
-  def inherit_default(attrib, opts)
-    default_value = aws_route53_hosted_zone.defaults[attrib]
-    if default_value.nil? && opts[:required]
-      raise Chef::Exceptions::ValidationFailed, "Required argument #{attrib} is missing!"
-    end
-    default_value
   end
 
   def validate_rr_type!(type, rr_list)
@@ -75,10 +63,10 @@ class Chef::Resource::AwsRoute53RecordSet < Chef::Provisioning::AWSDriver::Super
                 raise(::Chef::Exceptions::ValidationFailed,
                       "CNAME records may only have a single value (a hostname).")
 
-    when "TXT", "PTR", "AAAA"
+    when "TXT", "PTR", "AAAA", "SPF"
       true
     else
-      raise ArgumentError, "Argument '#{type}' must be one of #{%w(A MX SRV CNAME TXT PTR AAAA)}"
+      raise ArgumentError, "Argument '#{type}' must be one of #{%w(A MX SRV CNAME TXT PTR AAAA SPF)}"
     end
   end
 
