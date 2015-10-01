@@ -81,6 +81,7 @@ class Chef::Provider::AwsRoute53HostedZone < Chef::Provisioning::AWSDriver::AWSP
     config
   end
 
+  # this happens at a slightly different time in the lifecycle from #get_record_sets_from_resource.
   def populate_zone_info(record_set_resources, hosted_zone)
     record_set_resources.each do |rs|
       rs.aws_route53_zone_id(hosted_zone.id)
